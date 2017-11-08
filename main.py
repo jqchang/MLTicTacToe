@@ -2,7 +2,7 @@ import random
 import json
 import numpy as np
 
-LEARN = False
+LEARN = True
 
 class Game:
     def __init__(self):
@@ -11,12 +11,20 @@ class Game:
         self.current_player = 'X'
         self.turns = 0
         try:
-            f = open("policy.dat","r")
-            self.policy = json.loads(f.read())
+            f = open("policyO.dat","r")
+            self.policyO = json.loads(f.read())
             f.close()
         except (IOError, ValueError) as e:
-            self.policy = {}
-        self.actions = {}
+            self.policyO = {}
+        if LEARN:
+            try:
+                fx = open("policyX.dat","r")
+                self.policyX = json.loads(fx.read())
+                fx.close()
+            except (IOError, ValueError) as e:
+                self.policyX = {}
+        self.actionsO = []
+        self.actionsX = []
         self.winner = None
 
     def display_board(self):
@@ -44,6 +52,26 @@ class Game:
         # End Turn
         self.current_player = 'O'
 
+    def get_ai_player_input(self):
+        state = "".join(str(e) for e in self.board)
+        if state not in self.policyX:
+            # Create new fully random move policy based on available moves
+            self.policyX[state] = []
+            for count,elem in enumerate(self.board):
+                # Create a blank slate for all legal moves
+                if self.board[count] in range(0,9):
+                    self.policyX[state].append(1)
+                else:
+                    self.policyX[state].append(0)
+            # Add 1 for number of attempts
+            self.policyX[state].append(1)
+        move_prob = np.array(self.policyX[state][0:9])/float(sum(self.policyX[state][0:9]))
+        pick_move = np.random.choice(9,1, p=move_prob)
+        # Record the move being made
+        self.board[int(pick_move[0])] = 'X'
+        self.actionsX.append((state,int(pick_move[0])))
+        self.current_player = 'O'
+
     def get_random_player_input(self):
         legal = []
         for i in self.board:
@@ -55,30 +83,23 @@ class Game:
         self.current_player = 'O'
 
     def get_opponent_input(self):
-        # # Method 1: Fill first slot
-        # for count, elem in enumerate(board):
-        #     print count, elem
-        #     if board[count] in range(0,9):
-        #         board[count] = 'O'
-        #         break
-
         state = "".join(str(e) for e in self.board)
-        if state not in self.policy:
+        if state not in self.policyO:
             # Create new fully random move policy based on available moves
-            self.policy[state] = []
+            self.policyO[state] = []
             for count,elem in enumerate(self.board):
                 # Create a blank slate for all legal moves
                 if self.board[count] in range(0,9):
-                    self.policy[state].append(1)
+                    self.policyO[state].append(1)
                 else:
-                    self.policy[state].append(0)
+                    self.policyO[state].append(0)
             # Add 1 for number of attempts
-            self.policy[state].append(1)
-        move_prob = np.array(self.policy[state][0:9])/float(sum(self.policy[state][0:9]))
+            self.policyO[state].append(1)
+        move_prob = np.array(self.policyO[state][0:9])/float(sum(self.policyO[state][0:9]))
         pick_move = np.random.choice(9,1, p=move_prob)
         # Record the move being made
-        self.board[int(pick_move)] = 'O'
-        self.actions[state] = pick_move
+        self.board[int(pick_move[0])] = 'O'
+        self.actionsO.append((state,int(pick_move[0])))
         self.current_player = 'X'
 
     def check_endgame(self):
@@ -101,20 +122,32 @@ class Game:
 
     def learn(self):
         if self.winner == 'O':
-            result = 100
+            result = 10
         elif self.winner == 'X':
-            result = 0
+            result = -10
         else:
             result = 1
-        for key,val in self.actions.items():
-            # weight the average towards result
-            old_weight = self.policy[key][9]
-            self.policy[key][9] += 1
-            self.policy[key][val[0]] = float(old_weight)/self.policy[key][9]*float(self.policy[key][val[0]]) + float(1)/self.policy[key][9]*float(result)
+        for i,b in enumerate(self.actionsO):
+            # print self.policyO[b[0]][b[1]]
+            multiplier = (i+1.0)/len(self.actionsO)
+            self.policyO[b[0]][b[1]] += multiplier * result
+            self.policyO[b[0]][b[1]] = max(self.policyO[b[0]][b[1]],0.01)
         # write policy json
-        with open('policy.dat', 'w') as outfile:
-            json.dump(self.policy, outfile)
+        with open('policyO.dat', 'w') as outfile:
+            json.dump(self.policyO, outfile)
             outfile.close();
+
+        if LEARN:
+            if(result != 1):
+                result = -result
+            for i,b in enumerate(self.actionsX):
+                # print self.policyO[b[0]][b[1]]
+                multiplier = (i+1.0)/len(self.actionsX)
+                self.policyX[b[0]][b[1]] += multiplier * result
+                self.policyX[b[0]][b[1]] = max(self.policyX[b[0]][b[1]],0.01)
+            with open('policyX.dat', 'w') as outfile:
+                json.dump(self.policyX, outfile)
+                outfile.close();
 
 game = Game()
 
@@ -126,7 +159,7 @@ if LEARN:
         if plays % 100 == 0:
             print plays
         while not game.gameover:
-            game.get_random_player_input();
+            game.get_ai_player_input();
             game.turns += 1;
             game.check_endgame();
             if game.winner is None and game.turns < 9:
