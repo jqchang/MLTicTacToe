@@ -63,8 +63,6 @@ class Game:
                     self.policyX[state].append(1)
                 else:
                     self.policyX[state].append(0)
-            # Add 1 for number of attempts
-            self.policyX[state].append(1)
         move_prob = np.array(self.policyX[state][0:9])/float(sum(self.policyX[state][0:9]))
         pick_move = np.random.choice(9,1, p=move_prob)
         # Record the move being made
@@ -93,8 +91,6 @@ class Game:
                     self.policyO[state].append(1)
                 else:
                     self.policyO[state].append(0)
-            # Add 1 for number of attempts
-            self.policyO[state].append(1)
         move_prob = np.array(self.policyO[state][0:9])/float(sum(self.policyO[state][0:9]))
         pick_move = np.random.choice(9,1, p=move_prob)
         # Record the move being made
@@ -113,7 +109,7 @@ class Game:
                     print "Game over - Player", opponent[self.current_player], "wins!"
                     self.display_board();
                 self.winner = opponent[self.current_player]
-                return
+                return opponent[self.current_player]
         if self.turns >= 9:
             self.gameover = True
             if not LEARN:
@@ -154,6 +150,7 @@ game = Game()
 # Learning Mode
 if LEARN:
     plays = 0
+    winrate = {'X':0,'O':0,"T":0}
     while plays < 10000:
         plays += 1
         if plays % 100 == 0:
@@ -167,6 +164,12 @@ if LEARN:
                 game.turns += 1;
                 game.check_endgame();
         game.learn();
+        if game.winner is None:
+            winrate["T"] += 1
+        else:
+            winrate[game.winner] += 1
+        if plays % 100 == 0:
+            print "X:", winrate["X"], "O:", winrate["O"], "T:", winrate["T"], "O%:", 100*float(winrate["O"])/plays
         game = Game();
 else:
     while not game.gameover:
